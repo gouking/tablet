@@ -1,0 +1,44 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: tabletuser
+      POSTGRES_PASSWORD: tabletpass
+      POSTGRES_DB: tablet_system
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tabletuser"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://tabletuser:tabletpass@db:5432/tablet_system
+      JWT_SECRET: change-this-secret-in-production
+      PORT: 3001
+      NODE_ENV: production
+      FRONTEND_URL: http://localhost
+    ports:
+      - "3001:3001"
+    command: sh -c "npx prisma migrate deploy && node prisma/seed.js && node src/index.js"
+
+  frontend:
+    build: ./frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
