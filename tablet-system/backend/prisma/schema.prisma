@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 寺院（分院）
+model Temple {
+  id        Int      @id @default(autoincrement())
+  name      String
+  address   String?
+  phone     String?
+  createdAt DateTime @default(now())
+
+  users   User[]
+  tablets Tablet[]
+}
+
+// 使用者
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(STAFF)
+  templeId  Int
+  createdAt DateTime @default(now())
+
+  temple  Temple   @relation(fields: [templeId], references: [id])
+  tablets Tablet[]
+}
+
+enum Role {
+  ADMIN   // 系統管理員（跨寺院）
+  MANAGER // 分院管理員
+  STAFF   // 一般工作人員
+}
+
+// 牌位
+model Tablet {
+  id         Int          @id @default(autoincrement())
+  type       TabletType
+  name       String                       // 亡者/祈福者姓名
+  title      String?                      // 稱謂（如：居士、菩薩）
+  birthYear  String?
+  deathYear  String?
+  family     String?                      // 陽上款
+  duration   String                       // 供奉期間
+  startDate  DateTime     @default(now())
+  endDate    DateTime?
+  note       String?
+  status     TabletStatus @default(ACTIVE)
+  printCount Int          @default(0)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  templeId  Int
+  createdBy Int
+
+  temple  Temple @relation(fields: [templeId], references: [id])
+  creator User   @relation(fields: [createdBy], references: [id])
+
+  printJobs PrintJob[]
+}
+
+enum TabletType {
+  REBIRTH    // 往生牌位
+  BLESSING   // 祈福牌位
+  SALVATION  // 超度牌位
+  DISASTER   // 消災牌位
+}
+
+enum TabletStatus {
+  ACTIVE
+  EXPIRED
+  ARCHIVED
+}
+
+// 打印記錄
+model PrintJob {
+  id        Int      @id @default(autoincrement())
+  tabletId  Int
+  copies    Int      @default(1)
+  printer   String?
+  createdAt DateTime @default(now())
+
+  tablet Tablet @relation(fields: [tabletId], references: [id])
+}
