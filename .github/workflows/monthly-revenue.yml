@@ -1,0 +1,62 @@
+name: 每月營收自動抓取
+
+on:
+  schedule:
+    # 每月 11 日 02:30 UTC = 台灣時間 10:30(上市公司 10 日前公告完畢)
+    - cron: '30 2 11 * *'
+  workflow_dispatch:
+    inputs:
+      year:
+        description: '西元年(留空=自動抓最新一期)'
+        required: false
+      month:
+        description: '月份 1-12(留空=自動抓最新一期)'
+        required: false
+      market:
+        description: '市場別'
+        type: choice
+        options: [sii, otc]
+        default: sii
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安裝相依套件
+        run: pip install requests pandas lxml openpyxl
+
+      - name: 抓取營收彙總表
+        run: |
+          ARGS="--market ${{ inputs.market || 'sii' }}"
+          if [ -n "${{ inputs.year }}" ] && [ -n "${{ inputs.month }}" ]; then
+            ARGS="$ARGS --year ${{ inputs.year }} --month ${{ inputs.month }}"
+          fi
+          mkdir -p data
+          cd data
+          python ../scripts/fetch_monthly_revenue.py $ARGS
+
+      - name: 產生 Excel 版本
+        run: |
+          python - <<'EOF'
+          import glob, os, pandas as pd
+          csv = max(glob.glob('data/revenue_*.csv'), key=os.path.getmtime)
+          pd.read_csv(csv).to_excel(csv[:-4] + '.xlsx', index=False)
+          print('已轉出', csv[:-4] + '.xlsx')
+          EOF
+
+      - name: 提交結果
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet || git commit -m "自動更新每月營收資料"
+          git push
